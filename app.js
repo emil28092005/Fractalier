@@ -35,6 +35,7 @@ function baseGenome(){
     curvatureDrift:0,branchBias:0,facets:14,tipSides:0,tipScale:.28,
     figureSides:0,figureSpan:.5,figureScale:.22,figureEvery:2,figureSpin:0,
     curveMode:0,curveAmplitude:0,curveFrequency:1,
+    rootLayout:0,rootSpread:Math.PI*2,rootSpacing:.12,
     rootLength:.235,lineWidth:1.75,hue:94,hueStep:8,saturation:72,lightness:70,growthOverlap:.42
   };
 }
@@ -59,12 +60,19 @@ function familyName(family){
     radial:'Radial constellation',
     crystal:'Geometric crystal',
     spiral:'Spiral recursion',
-    lattice:'Connected lattice'
+    lattice:'Connected lattice',
+    fan:'Angular fan',
+    field:'Parallel field',
+    bilateral:'Bilateral weave'
   }[family]||'Recursive structure';
 }
 function curveName(mode){return['linear','sine','cosine','tangent','harmonic'][Math.round(mode)]||'linear'}
+function layoutName(mode){return['radial','fan','parallel','bilateral'][Math.round(mode)]||'radial'}
 function classifyFamily(genome){
   if(genome.family)return genome.family;
+  if(genome.rootLayout===1)return'fan';
+  if(genome.rootLayout===2)return'field';
+  if(genome.rootLayout===3)return'bilateral';
   if(genome.closure>.35)return'lattice';
   if(Math.abs(genome.turn)>.35||Math.abs(genome.twist)>.3)return'spiral';
   if(genome.symmetry>=6&&Math.abs(genome.bend)<.08)return'crystal';
@@ -170,7 +178,7 @@ async function requestPersistentStorage(){
 }
 
 function createGenome(seed){
-  const family=pick(seed,1,['arboreal','radial','radial','crystal','spiral','lattice']);
+  const family=pick(seed,1,['arboreal','radial','radial','crystal','spiral','lattice','fan','field','bilateral']);
   const g={...baseGenome(),family};
   g.hue=range(seed,2,28,330);
   g.hueStep=range(seed,3,-18,24);
@@ -232,7 +240,7 @@ function createGenome(seed){
     g.figureScale=range(seed,112,.11,.25);g.figureEvery=pick(seed,113,[2,3]);g.figureSpin=range(seed,114,-.55,.55);
     g.curveMode=pick(seed,129,[1,1,2,4]);g.curveAmplitude=range(seed,130,.1,.32);
     g.curveFrequency=range(seed,131,.65,1.8);
-  }else{
+  }else if(family==='lattice'){
     g.branches=pick(seed,50,[2,2,3]);g.symmetry=pick(seed,51,[3,4,5,6]);g.depth=g.branches===3?4:pick(seed,52,[5,6]);
     g.angle=range(seed,53,.36,.9);g.scale=range(seed,54,.52,.64);g.closure=range(seed,55,.48,.92);
     g.bend=range(seed,56,-.08,.08);g.twist=range(seed,57,-.1,.1);g.hueStep=range(seed,58,5,26);
@@ -245,6 +253,39 @@ function createGenome(seed){
     g.figureScale=range(seed,117,.12,.3);g.figureEvery=pick(seed,118,[1,2,2]);g.figureSpin=range(seed,119,-.28,.28);
     g.curveMode=pick(seed,132,[0,0,1,3]);g.curveAmplitude=g.curveMode?range(seed,133,.03,.13):0;
     g.curveFrequency=range(seed,134,.75,1.5);
+  }else if(family==='fan'){
+    g.rootLayout=1;g.rootSpread=range(seed,140,.7,2.45);g.symmetry=pick(seed,141,[3,4,5,7]);
+    g.branches=pick(seed,142,[1,2,2]);g.depth=g.branches===1?8:pick(seed,143,[5,6,7]);
+    g.angle=range(seed,144,.26,.68);g.scale=range(seed,145,.59,.73);g.bend=range(seed,146,-.13,.13);
+    g.twist=range(seed,147,-.12,.12);g.angleWave=range(seed,148,.04,.18);g.scaleWave=range(seed,149,.01,.08);
+    g.angleFrequency=range(seed,150,.8,2.4);g.scaleFrequency=range(seed,151,1.1,3.2);
+    g.branchBias=range(seed,152,-.12,.12);g.facets=pick(seed,153,[8,10,14]);
+    g.figureSides=pick(seed,154,[0,0,3,4,5]);g.figureSpan=range(seed,155,.2,.55);
+    g.figureScale=range(seed,156,.1,.22);g.figureEvery=pick(seed,157,[2,3]);
+    g.curveMode=pick(seed,158,[0,1,1,2,4]);g.curveAmplitude=g.curveMode?range(seed,159,.05,.22):0;
+    g.curveFrequency=range(seed,160,.7,1.9);
+  }else if(family==='field'){
+    g.rootLayout=2;g.rootSpread=range(seed,161,0,.36);g.rootSpacing=range(seed,162,.065,.15);
+    g.symmetry=pick(seed,163,[3,4,5,6,8]);g.branches=pick(seed,164,[1,2,2]);g.depth=g.branches===1?8:pick(seed,165,[5,6]);
+    g.angle=range(seed,166,.2,.58);g.scale=range(seed,167,.57,.71);g.bend=range(seed,168,-.1,.1);
+    g.twist=range(seed,169,-.07,.07);g.angleWave=range(seed,170,.025,.13);g.scaleWave=range(seed,171,.01,.065);
+    g.angleFrequency=range(seed,172,.8,2.2);g.scaleFrequency=range(seed,173,1.2,3);
+    g.alternation=range(seed,174,-.12,.12);g.facets=pick(seed,175,[8,10,14]);
+    g.figureSides=pick(seed,176,[0,0,3,4,6]);g.figureSpan=range(seed,177,.18,.5);
+    g.figureScale=range(seed,178,.09,.2);g.figureEvery=pick(seed,179,[2,3]);
+    g.curveMode=pick(seed,180,[0,0,1,2,3]);g.curveAmplitude=g.curveMode?range(seed,181,.035,.16):0;
+    g.curveFrequency=range(seed,182,.7,1.7);
+  }else{
+    g.rootLayout=3;g.rootSpread=range(seed,183,0,.65);g.rootSpacing=range(seed,184,.055,.14);
+    g.symmetry=pick(seed,185,[2,4,4,6]);g.branches=pick(seed,186,[1,2,2]);g.depth=g.branches===1?8:pick(seed,187,[5,6]);
+    g.angle=range(seed,188,.25,.7);g.scale=range(seed,189,.57,.7);g.bend=range(seed,190,-.12,.12);
+    g.twist=range(seed,191,-.1,.1);g.angleWave=range(seed,192,.035,.16);g.scaleWave=range(seed,193,.01,.07);
+    g.angleFrequency=range(seed,194,.8,2.3);g.scaleFrequency=range(seed,195,1.1,3.1);
+    g.alternation=range(seed,196,-.15,.15);g.closure=range(seed,197,0,.3);g.facets=pick(seed,198,[7,10,14]);
+    g.figureSides=pick(seed,199,[0,3,4,6]);g.figureSpan=range(seed,200,.2,.58);
+    g.figureScale=range(seed,201,.1,.22);g.figureEvery=pick(seed,202,[2,3]);
+    g.curveMode=pick(seed,203,[0,1,2,4]);g.curveAmplitude=g.curveMode?range(seed,204,.05,.2):0;
+    g.curveFrequency=range(seed,205,.7,1.8);
   }
   return g;
 }
@@ -259,6 +300,7 @@ const mutationRules={
   figureSides:[1,0,10,true],figureSpan:[.18,.12,1],figureScale:[.12,.08,.55],
   figureEvery:[1,1,4,true],figureSpin:[.3,-1.2,1.2],
   curveMode:[1,0,4,true],curveAmplitude:[.14,0,.6],curveFrequency:[.5,.35,3.5],
+  rootLayout:[1,0,3,true],rootSpread:[.45,0,2.8],rootSpacing:[.045,.04,.24],
   saturation:[12,48,92],lightness:[10,48,86],growthOverlap:[.16,.2,.85]
 };
 function crossoverGenomes(parentA,parentB,seed){
@@ -283,9 +325,15 @@ function crossoverGenomes(parentA,parentB,seed){
       if(value>0)value=clamp(Math.round(value),3,upper);
     }else if(key==='curveMode'){
       value=child[key]===0?1+Math.floor(randomFrom(seed,310+index)*4):randomFrom(seed,320+index)<.16?0:clamp(child[key]+direction,1,4);
+    }else if(key==='rootLayout'){
+      value=child[key]===0?1+Math.floor(randomFrom(seed,310+index)*3):randomFrom(seed,320+index)<.16?0:clamp(child[key]+direction,1,3);
     }else value=integer?child[key]+direction*amount:child[key]+direction*amount*(.45+randomFrom(seed,310+index)*.55);
     if(integer)value=Math.round(value);
     child[key]=key==='phase'||key==='hue'?((value%max)+max)%max:clamp(value,min,max);
+    if(key==='rootLayout'&&child.rootLayout>0){
+      child.rootSpread=child.rootLayout===1?range(seed,325+index,.7,2.4):range(seed,325+index,0,.6);
+      child.rootSpacing=range(seed,327+index,.06,.16);
+    }
     mutations.push(key);
   }
   if(a.figureSides===0&&b.figureSides===0&&child.figureSides===0&&randomFrom(seed,330)<.09){
@@ -301,6 +349,12 @@ function crossoverGenomes(parentA,parentB,seed){
     child.curveAmplitude=range(seed,342,.06,.24);
     child.curveFrequency=range(seed,343,.6,2.2);
     mutations.push('curveMode');
+  }
+  if(a.rootLayout===0&&b.rootLayout===0&&child.rootLayout===0&&randomFrom(seed,350)<.07){
+    child.rootLayout=1+Math.floor(randomFrom(seed,351)*3);
+    child.rootSpread=child.rootLayout===1?range(seed,352,.7,2.4):range(seed,352,0,.6);
+    child.rootSpacing=range(seed,353,.06,.16);
+    mutations.push('rootLayout');
   }
   child.family=classifyFamily({...child,family:null});
   return{genome:child,inherited,mutations};
@@ -356,12 +410,35 @@ function traceFigureSegment(curve,node,g){
     return[centerX+Math.cos(theta)*radius,centerY+Math.sin(theta)*radius];
   });
 }
+function rootPlacement(g,root,count){
+  const t=count===1?.5:root/(count-1),centered=t-.5,layout=Math.round(g.rootLayout);
+  if(layout===1){
+    return{x:0,y:.28,direction:-Math.PI/2+centered*g.rootSpread};
+  }
+  if(layout===2){
+    return{
+      x:centered*g.rootSpacing*(count-1),
+      y:.3+Math.sin(t*Math.PI*2+g.phase)*g.rootSpacing*.12,
+      direction:-Math.PI/2+centered*g.rootSpread
+    };
+  }
+  if(layout===3){
+    const upward=root%2===0,tilt=centered*g.rootSpread;
+    return{
+      x:centered*g.rootSpacing*(count-1),y:0,
+      direction:(upward?-Math.PI/2:Math.PI/2)+(upward?tilt:-tilt)
+    };
+  }
+  return count===1
+    ?{x:0,y:.34,direction:-Math.PI/2}
+    :{x:0,y:0,direction:-Math.PI/2+root*Math.PI*2/count};
+}
 function compileGeometry(genome){
   const g=normalizeGenome(genome),paths=[],queue=[];
-  const facets=clamp(Math.round(g.facets),3,18);
-  const rootY=g.symmetry===1?.34:0;
-  for(let root=0;root<g.symmetry;root++){
-    queue.push({x:0,y:rootY,direction:g.symmetry===1?-Math.PI/2:-Math.PI/2+root*Math.PI*2/g.symmetry,length:g.rootLength,depth:0,root,turn:g.turn,bend:g.bend});
+  const facets=clamp(Math.round(g.facets),3,18),rootCount=clamp(Math.round(g.symmetry),1,8);
+  for(let root=0;root<rootCount;root++){
+    const placement=rootPlacement(g,root,rootCount);
+    queue.push({...placement,length:g.rootLength,depth:0,root,turn:g.turn,bend:g.bend});
   }
   let cursor=0;
   while(cursor<queue.length&&paths.length<MAX_PATHS){
@@ -548,7 +625,7 @@ function exportFormula(){
   const{id,seed,genome,parents,inheritance,mutations}=state.current;
   const payload={
     format:'fractalier-formula',version:1,id:formulaId(id),seed,
-    equation:'F[n+1] = union(s[n] R(i alpha[n] + n tau) K(kappa[n] + gamma T(f t + phi)) A[i](F[n])) union Cq(E[n]) union Pm^lambda(E[n])',
+    equation:'F[n+1] = union_r L_layout(r) union_i(s[n] R(i alpha[n] + n tau) K(kappa[n] + gamma T(f t + phi)) A[i](F[n])) union Cq(E[n]) union Pm^lambda(E[n])',
     genome,parents:parents.map(formulaId),inheritance,mutations
   };
   downloadBlob(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),`fractalier-${formulaId(id)}.json`);
@@ -736,7 +813,7 @@ function toggleParent(id){
   if(selected.length===2&&width<=760)setGallery(false);
 }
 
-const geneLabels={branches:'branches',angle:'angle',scale:'scale',depth:'recursion',symmetry:'symmetry',anchors:'anchors',
+const geneLabels={branches:'branches',angle:'angle',scale:'scale',depth:'recursion',symmetry:'root count',anchors:'anchors',
   anchorStart:'anchor position',twist:'twist',bend:'bend',turn:'turn',angleDrift:'angle drift',scaleDrift:'scale drift',
   alternation:'alternation',closure:'closure',angleWave:'angle resonance',angleFrequency:'angle frequency',
   scaleWave:'scale pulse',scaleFrequency:'scale frequency',phase:'harmonic phase',curvatureDrift:'curvature drift',
@@ -744,6 +821,7 @@ const geneLabels={branches:'branches',angle:'angle',scale:'scale',depth:'recursi
   figureSides:'figure order',figureSpan:'figure segment',figureScale:'figure scale',
   figureEvery:'figure interval',figureSpin:'figure rotation',
   curveMode:'trigonometric curve',curveAmplitude:'curve amplitude',curveFrequency:'curve frequency',
+  rootLayout:'root layout',rootSpread:'root spread',rootSpacing:'root spacing',
   rootLength:'root length',lineWidth:'line width',hue:'color',hueStep:'color shift',
   saturation:'saturation',lightness:'lightness',growthOverlap:'growth overlap'};
 function updateFormulaUI(){
@@ -765,6 +843,7 @@ function updateFormulaUI(){
   document.querySelector('#trait-curve').textContent=g.curveMode
     ?`${curveName(g.curveMode)} ${g.curveFrequency.toFixed(1)}×`
     :'linear';
+  document.querySelector('#trait-layout').textContent=layoutName(g.rootLayout);
   const lineage=document.querySelector('#lineage');
   if(c?.parents?.length===2){
     const inherited=c.inheritance?`${c.inheritance.a}/${c.inheritance.b} genes`:'mixed genes';

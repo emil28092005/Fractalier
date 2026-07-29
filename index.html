@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#07100f" />
     <title>Fractalier — Mathematical Fractal Generator</title>
-    <link rel="stylesheet" href="style.css?v=34" />
+    <link rel="stylesheet" href="style.css?v=35" />
   </head>
   <body>
     <main>
@@ -45,13 +45,13 @@
           <span>αₙ = α + Δαn + β sin(nω + φ)</span>
           <span>sₙ = s + ρ cos(nν + φ)</span>
           <span>T(t) ∈ {sin t, cos t, atan(tan t), H(t)}</span>
-          <span>Fₙ₊₁ = ⋃ᵢ sₙR(iαₙ+nτ)K(κₙ+γT(ft+φ))Aᵢ(Fₙ) ∪ Cq ∪ Pₘλ</span>
+          <span>Fₙ₊₁ = ⋃ᵣ Lℓ(r) ⋃ᵢ sₙR(iαₙ+nτ)K(κₙ+γT)Aᵢ(Fₙ) ∪ Cq ∪ Pₘλ</span>
         </div>
         <div class="traits">
           <span>branches <b id="trait-branch">2</b></span>
           <span>angle <b id="trait-angle">30°</b></span>
           <span>scale <b id="trait-scale">0.68</b></span>
-          <span>symmetry <b id="trait-symmetry">1</b></span>
+          <span>roots <b id="trait-symmetry">1</b></span>
           <span>recursion <b id="trait-depth">8</b></span>
           <span>closure <b id="trait-closure">0.00</b></span>
           <span>angle wave <b id="trait-wave">0°</b></span>
@@ -59,6 +59,7 @@
           <span>facets <b id="trait-facets">14</b></span>
           <span>figure <b id="trait-figure">none</b></span>
           <span>curve <b id="trait-curve">linear</b></span>
+          <span>layout <b id="trait-layout">radial</b></span>
         </div>
         <p class="lineage" id="lineage">founder formula · no parents</p>
       </aside>
@@ -110,6 +111,6 @@
         <span id="storage-status">checking local storage…</span>
       </footer>
     </main>
-    <script src="app.js?v=34"></script>
+    <script src="app.js?v=35"></script>
   </body>
 </html>
