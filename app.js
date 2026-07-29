@@ -125,11 +125,13 @@ async function hydrateState(){
     const rawHistory=records.length?records:(source?.history||source?.population||[]);
     const history=rawHistory.map(normalizeRecord).sort((a,b)=>a.id-b.id);
     const oldCurrent=source?.current;
+    const currentHistoryRecord=oldCurrent?history.find(item=>item.id===Number(oldCurrent.id)):null;
     const current=oldCurrent?.genome?{
       id:Number(oldCurrent.id)||history.at(-1)?.id||1,
       seed:Number(oldCurrent.seed)||randomSeed(),
       genome:normalizeGenome(oldCurrent.genome),
-      source:'restored',parents:oldCurrent.parents||[],inheritance:oldCurrent.inheritance||null,mutations:oldCurrent.mutations||[]
+      source:oldCurrent.source&&oldCurrent.source!=='restored'?oldCurrent.source:currentHistoryRecord?.source||'restored',
+      parents:oldCurrent.parents||[],inheritance:oldCurrent.inheritance||null,mutations:oldCurrent.mutations||[]
     }:history.length?{...history.at(-1),source:'restored'}:null;
     const nextId=Math.max(Number(source?.nextId||source?.nextOrganismId)||1,...history.map(item=>item.id+1),current?current.id+1:1);
     const selectedParents=(source?.selectedParents||[]).filter(id=>history.some(item=>item.id===id)).slice(0,2);
@@ -300,7 +302,7 @@ const mutationRules={
   figureSides:[1,0,10,true],figureSpan:[.18,.12,1],figureScale:[.12,.08,.55],
   figureEvery:[1,1,4,true],figureSpin:[.3,-1.2,1.2],
   curveMode:[1,0,4,true],curveAmplitude:[.14,0,.6],curveFrequency:[.5,.35,3.5],
-  rootLayout:[1,0,3,true],rootSpread:[.45,0,2.8],rootSpacing:[.045,.04,.24],
+  rootLayout:[1,0,3,true],rootSpread:[.45,0,Math.PI*2],rootSpacing:[.045,.04,.24],
   saturation:[12,48,92],lightness:[10,48,86],growthOverlap:[.16,.2,.85]
 };
 function crossoverGenomes(parentA,parentB,seed){
@@ -631,6 +633,44 @@ function exportFormula(){
   downloadBlob(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),`fractalier-${formulaId(id)}.json`);
   closeExportMenu();showToast('Formula JSON downloaded');
 }
+function sanitizeImportedGenome(payload){
+  if(!payload||typeof payload!=='object'||Array.isArray(payload))throw new Error('The JSON root must be an object');
+  if(payload.format&&payload.format!=='fractalier-formula')throw new Error('This is not a Fractalier formula');
+  const candidate=payload.genome||payload;
+  if(!candidate||typeof candidate!=='object'||Array.isArray(candidate))throw new Error('The file does not contain a genome');
+  const defaults=baseGenome(),genome={...defaults},keys=Object.keys(defaults).filter(key=>key!=='family');
+  let recognized=0;
+  for(const key of keys){
+    if(typeof candidate[key]!=='number'||!Number.isFinite(candidate[key]))continue;
+    recognized++;
+    let value=candidate[key],rule=mutationRules[key];
+    if(rule){
+      const[,min,max,integer]=rule;
+      if(integer)value=Math.round(value);
+      value=clamp(value,min,max);
+    }
+    if((key==='tipSides'||key==='figureSides')&&value>0)value=clamp(Math.round(value),3,key==='tipSides'?8:10);
+    genome[key]=value;
+  }
+  if(recognized<5)throw new Error('No recognizable Fractalier genome was found');
+  genome.family=classifyFamily({...genome,family:null});
+  return genome;
+}
+function importFormulaPayload(payload){
+  const genome=sanitizeImportedGenome(payload);
+  const importedSeed=Number(payload?.seed);
+  const seed=Number.isFinite(importedSeed)?Math.abs(Math.trunc(importedSeed))>>>0:randomSeed();
+  const id=state.nextId++;
+  showFormula({id,seed,genome,source:'import',parents:[],inheritance:null,mutations:[]});
+  showToast(`Imported as ${formulaId(id)}`);
+  return id;
+}
+async function importFormulaFile(file){
+  if(!file)return;
+  if(file.size>256*1024)throw new Error('The formula file is too large');
+  const payload=JSON.parse(await file.text());
+  return importFormulaPayload(payload);
+}
 async function exportVideo(){
   if(!state.current||isBusy)return;
   closeExportMenu();
@@ -849,7 +889,8 @@ function updateFormulaUI(){
     const inherited=c.inheritance?`${c.inheritance.a}/${c.inheritance.b} genes`:'mixed genes';
     const mutations=c.mutations?.length?` · mutation: ${c.mutations.map(key=>geneLabels[key]||key).join(', ')}`:' · no mutation';
     lineage.textContent=`${formulaId(c.parents[0])} × ${formulaId(c.parents[1])} · inherited ${inherited}${mutations}`;
-  }else lineage.textContent='founder formula · no parents';
+  }else if(c?.source==='import')lineage.textContent='imported formula · external genome';
+  else lineage.textContent='founder formula · no parents';
   updateSelectionUI();
 }
 function updateSelectionUI(){
@@ -888,7 +929,7 @@ function showArchivePreview(item,card){
   document.querySelector('#preview-id').textContent=formulaId(item.id);
   document.querySelector('#preview-meta').textContent=item.parents?.length===2
     ?`${formulaId(item.parents[0])} × ${formulaId(item.parents[1])} · ${familyName(item.genome.family)}`
-    :`${familyName(item.genome.family)} · founder`;
+    :`${familyName(item.genome.family)} · ${item.source==='import'?'imported':'founder'}`;
   preview.classList.remove('hidden');
   const panel=ui.gallery.getBoundingClientRect(),cardBox=card.getBoundingClientRect(),previewWidth=preview.offsetWidth;
   const left=panel.left-previewWidth-12>=12?panel.left-previewWidth-12:Math.min(innerWidth-previewWidth-12,panel.right+12);
@@ -977,6 +1018,15 @@ document.querySelector('#save-background').addEventListener('click',()=>download
 document.querySelector('#save-transparent').addEventListener('click',()=>downloadImage(false));
 document.querySelector('#save-video').addEventListener('click',exportVideo);
 document.querySelector('#save-formula').addEventListener('click',exportFormula);
+document.querySelector('#import-formula').addEventListener('click',()=>{
+  closeExportMenu();document.querySelector('#formula-file').click();
+});
+document.querySelector('#formula-file').addEventListener('change',async event=>{
+  const input=event.currentTarget,file=input.files?.[0];
+  try{await importFormulaFile(file)}
+  catch(error){console.warn('Could not import the formula',error);showToast(error instanceof SyntaxError?'Invalid JSON file':error.message||'Formula import failed')}
+  finally{input.value=''}
+});
 document.addEventListener('click',closeExportMenu);
 document.addEventListener('pointerdown',requestPersistentStorage,{once:true,capture:true});
 document.addEventListener('keydown',event=>{

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#07100f" />
     <title>Fractalier — Mathematical Fractal Generator</title>
-    <link rel="stylesheet" href="style.css?v=35" />
+    <link rel="stylesheet" href="style.css?v=38" />
   </head>
   <body>
     <main>
@@ -28,6 +28,8 @@
               <button id="save-transparent">PNG · transparent</button>
               <button id="save-video">WebM · growth video</button>
               <button id="save-formula">JSON · formula</button>
+              <button id="import-formula">Import · formula JSON</button>
+              <input id="formula-file" type="file" accept=".json,application/json" hidden />
             </div>
           </div>
         </nav>
@@ -111,6 +113,6 @@
         <span id="storage-status">checking local storage…</span>
       </footer>
     </main>
-    <script src="app.js?v=35"></script>
+    <script src="app.js?v=38"></script>
   </body>
 </html>
