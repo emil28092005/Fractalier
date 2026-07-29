@@ -97,6 +97,14 @@ nav .export-menu button{display:block;width:100%;border:0;text-align:left}
 .action-copy{min-width:0;padding-left:5px}
 .action-copy span{display:block;overflow:hidden;margin-bottom:4px;color:var(--muted);font:7px DM Mono,monospace;text-overflow:ellipsis;white-space:nowrap;text-transform:uppercase}
 .action-copy strong{display:block;overflow:hidden;font-size:10px;font-weight:500;text-overflow:ellipsis;white-space:nowrap}
+.breeding-controls{display:flex;gap:6px;flex:0 0 auto}
+.breeding-controls label{display:block}
+.breeding-controls label>span{display:block;margin:0 0 4px;color:var(--muted);font:7px DM Mono,monospace;text-transform:uppercase}
+.breeding-controls select{
+  width:96px;height:29px;padding:0 22px 0 7px;border:1px solid var(--line);border-radius:0;
+  background:#0b1b17;color:#b6c6bc;cursor:pointer;font:8px DM Mono,monospace
+}
+.breeding-controls select:hover{border-color:var(--line-bright);color:var(--lime)}
 .action-buttons{display:flex;gap:7px;flex:0 0 auto}
 .action-buttons button{height:48px;border:0;cursor:pointer}
 .action-buttons button:disabled{cursor:wait;opacity:.58}
@@ -133,15 +141,18 @@ footer span:last-child{text-align:right}
   .equation{margin-top:9px;padding:8px 0;font-size:7.5px}
   .equation span{overflow:hidden;text-overflow:ellipsis}
   .traits{gap:6px 8px;margin-top:8px}
-  .gallery-panel,.gallery-panel.open{top:72px;right:10px;bottom:112px;left:10px;width:auto}
+  .gallery-panel,.gallery-panel.open{top:72px;right:10px;bottom:158px;left:10px;width:auto}
   .archive{grid-template-columns:repeat(3,1fr)}
   .genome-preview{display:none!important}
-  .action-bar{right:10px;bottom:40px;left:10px;width:auto;padding:8px;transform:none}
+  .action-bar{right:10px;bottom:40px;left:10px;width:auto;flex-direction:column;gap:7px;padding:8px;transform:none}
   .action-copy{display:none}
+  .breeding-controls{width:100%}
+  .breeding-controls label{min-width:0;flex:1}
+  .breeding-controls select{width:100%}
   .action-buttons{width:100%}
   .action-buttons button{height:46px}
   .action-buttons .secondary,.action-buttons .primary{min-width:0;flex:1}
-  .toast{bottom:101px}
+  .toast{bottom:154px}
   footer{grid-template-columns:1fr auto;padding:0 10px}
   footer>span:nth-child(2){display:none}
 }

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#07100f" />
     <title>Fractalier — Mathematical Fractal Generator</title>
-    <link rel="stylesheet" href="style.css?v=38" />
+    <link rel="stylesheet" href="style.css?v=39" />
   </head>
   <body>
     <main>
@@ -97,6 +97,27 @@
           <span id="action-kicker">selective generation · choose A and B</span>
           <strong id="action-title">Choose two parents from the Gallery</strong>
         </div>
+        <div class="breeding-controls" aria-label="Crossover settings">
+          <label>
+            <span>inheritance</span>
+            <select id="gene-mix" aria-label="Genome inheritance proportion">
+              <option value="0.2">20% A · 80% B</option>
+              <option value="0.35">35% A · 65% B</option>
+              <option value="0.5" selected>50% A · 50% B</option>
+              <option value="0.65">65% A · 35% B</option>
+              <option value="0.8">80% A · 20% B</option>
+            </select>
+          </label>
+          <label>
+            <span>mutation</span>
+            <select id="mutation-level" aria-label="Mutation intensity">
+              <option value="0">Stable</option>
+              <option value="1" selected>Natural</option>
+              <option value="2">Active</option>
+              <option value="3">Volatile</option>
+            </select>
+          </label>
+        </div>
         <div class="action-buttons">
           <button class="primary" id="cross" disabled>
             <span>Cross A × B</span>
@@ -113,6 +134,6 @@
         <span id="storage-status">checking local storage…</span>
       </footer>
     </main>
-    <script src="app.js?v=38"></script>
+    <script src="app.js?v=39"></script>
   </body>
 </html>

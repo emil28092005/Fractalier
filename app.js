@@ -19,6 +19,13 @@ const MAX_PATHS=3200;
 const REVEAL_TIME=2200;
 const PREVIEW_TIME=1800;
 const HISTORY_PAGE=48;
+const MIX_OPTIONS=[.2,.35,.5,.65,.8];
+const MUTATION_PROFILES=[
+  {name:'stable',strength:.55,structural:.025},
+  {name:'natural',strength:1,structural:.07},
+  {name:'active',strength:1.45,structural:.15},
+  {name:'volatile',strength:2,structural:.26}
+];
 
 let width=0,height=0,background;
 let view={scale:1,offsetX:0,offsetY:0};
@@ -26,7 +33,16 @@ let database=null,storedHistoryIds=new Set(),historyVisible=HISTORY_PAGE;
 let animationFrame=0,animationToken=0,previewAnimationFrame=0,previewToken=0,lastProgress=1,galleryOpen=false,toastTimer=0,isBusy=false;
 let state=freshState();
 
-function freshState(){return{version:6,history:[],nextId:1,current:null,selectedParents:[]}}
+function normalizeBreeding(value){
+  const requested=Number(value?.mix);
+  const requestedLevel=Number(value?.mutationLevel);
+  const mix=MIX_OPTIONS.reduce((closest,option)=>Math.abs(option-requested)<Math.abs(closest-requested)?option:closest,.5);
+  return{
+    mix:Number.isFinite(requested)?mix:.5,
+    mutationLevel:Number.isFinite(requestedLevel)?clamp(Math.round(requestedLevel),0,3):1
+  };
+}
+function freshState(){return{version:7,history:[],nextId:1,current:null,selectedParents:[],breeding:normalizeBreeding({mix:.5,mutationLevel:1})}}
 function baseGenome(){
   return{
     family:'arboreal',branches:2,angle:.52,scale:.68,depth:8,symmetry:1,anchors:1,anchorStart:.65,
@@ -68,6 +84,10 @@ function familyName(family){
 }
 function curveName(mode){return['linear','sine','cosine','tangent','harmonic'][Math.round(mode)]||'linear'}
 function layoutName(mode){return['radial','fan','parallel','bilateral'][Math.round(mode)]||'radial'}
+function mixName(mix){
+  const a=Math.round(mix*100);
+  return`${a}% A · ${100-a}% B`;
+}
 function classifyFamily(genome){
   if(genome.family)return genome.family;
   if(genome.rootLayout===1)return'fan';
@@ -92,7 +112,8 @@ function normalizeRecord(item){
     source:item?.source||'legacy',
     parents:item?.parents||[],
     inheritance:item?.inheritance||null,
-    mutations:item?.mutations||[]
+    mutations:item?.mutations||[],
+    breeding:item?.breeding?normalizeBreeding(item.breeding):null
   };
 }
 
@@ -131,29 +152,37 @@ async function hydrateState(){
       seed:Number(oldCurrent.seed)||randomSeed(),
       genome:normalizeGenome(oldCurrent.genome),
       source:oldCurrent.source&&oldCurrent.source!=='restored'?oldCurrent.source:currentHistoryRecord?.source||'restored',
-      parents:oldCurrent.parents||[],inheritance:oldCurrent.inheritance||null,mutations:oldCurrent.mutations||[]
+      parents:oldCurrent.parents||[],inheritance:oldCurrent.inheritance||null,mutations:oldCurrent.mutations||[],
+      breeding:oldCurrent.breeding?normalizeBreeding(oldCurrent.breeding):currentHistoryRecord?.breeding||null
     }:history.length?{...history.at(-1),source:'restored'}:null;
     const nextId=Math.max(Number(source?.nextId||source?.nextOrganismId)||1,...history.map(item=>item.id+1),current?current.id+1:1);
     const selectedParents=(source?.selectedParents||[]).filter(id=>history.some(item=>item.id===id)).slice(0,2);
-    state={version:6,history,nextId,current,selectedParents};
+    const breeding=normalizeBreeding(source?.breeding);
+    state={version:7,history,nextId,current,selectedParents,breeding};
     storedHistoryIds=new Set(records.map(item=>item.id));
-    if(saved?.version!==6||(!records.length&&history.length))saveState();
+    if(saved?.version!==7||(!records.length&&history.length))saveState();
   }catch(error){
     console.warn('IndexedDB is unavailable; using a temporary session',error);
     const history=(legacy?.population||[]).map(normalizeRecord);
-    state={version:6,history,nextId:Math.max(1,...history.map(item=>item.id+1)),current:history.at(-1)||null,selectedParents:[]};
+    state={
+      version:7,history,nextId:Math.max(1,...history.map(item=>item.id+1)),current:history.at(-1)||null,
+      selectedParents:[],breeding:normalizeBreeding(legacy?.breeding)
+    };
   }
 }
 function persistableCurrent(){
   if(!state.current)return null;
-  const{id,seed,genome,source,parents,inheritance,mutations}=state.current;
-  return{id,seed,genome,source,parents,inheritance,mutations};
+  const{id,seed,genome,source,parents,inheritance,mutations,breeding}=state.current;
+  return{id,seed,genome,source,parents,inheritance,mutations,breeding};
 }
 function saveState(){
   if(!database){ui.storageStatus.textContent='storage unavailable';return}
   try{
     const transaction=database.transaction([DB_STATE,DB_HISTORY],'readwrite');
-    transaction.objectStore(DB_STATE).put({version:6,nextId:state.nextId,current:persistableCurrent(),selectedParents:state.selectedParents,history:[]},'main');
+    transaction.objectStore(DB_STATE).put({
+      version:7,nextId:state.nextId,current:persistableCurrent(),selectedParents:state.selectedParents,
+      breeding:state.breeding,history:[]
+    },'main');
     const historyStore=transaction.objectStore(DB_HISTORY);
     const additions=state.history.filter(item=>!storedHistoryIds.has(item.id));
     for(const item of additions)historyStore.put(item);
@@ -305,15 +334,24 @@ const mutationRules={
   rootLayout:[1,0,3,true],rootSpread:[.45,0,Math.PI*2],rootSpacing:[.045,.04,.24],
   saturation:[12,48,92],lightness:[10,48,86],growthOverlap:[.16,.2,.85]
 };
-function crossoverGenomes(parentA,parentB,seed){
+function mutationCountFor(level,roll){
+  if(level===0)return roll<.92?0:1;
+  if(level===1)return roll<.8?0:roll<.98?1:2;
+  if(level===2)return roll<.55?0:roll<.9?1:2;
+  return roll<.25?0:roll<.6?1:roll<.87?2:3;
+}
+function crossoverGenomes(parentA,parentB,seed,options={}){
   const a=normalizeGenome(parentA.genome),b=normalizeGenome(parentB.genome),child={},inherited={a:0,b:0};
   const keys=Object.keys(baseGenome()).filter(key=>key!=='family');
+  const breeding=normalizeBreeding(options),profile=MUTATION_PROFILES[breeding.mutationLevel];
+  const targetA=clamp(Math.round(keys.length*breeding.mix),1,keys.length-1);
+  const fromAKeys=new Set(keys.map((key,index)=>({key,index,score:randomFrom(seed,200+index)}))
+    .sort((left,right)=>left.score-right.score||left.index-right.index).slice(0,targetA).map(item=>item.key));
   for(const[index,key]of keys.entries()){
-    const fromA=index===0||index>0&&randomFrom(seed,200+index)<.5;
+    const fromA=fromAKeys.has(key);
     child[key]=fromA?a[key]:b[key];inherited[fromA?'a':'b']++;
   }
-  if(inherited.b===0){const key=keys.at(-1);child[key]=b[key];inherited.a--;inherited.b++}
-  const mutations=[],roll=randomFrom(seed,280),mutationCount=roll<.8?0:roll<.98?1:2,used=new Set();
+  const mutations=[],mutationCount=mutationCountFor(breeding.mutationLevel,randomFrom(seed,280)),used=new Set();
   for(let index=0;index<mutationCount;index++){
     let choice=Math.floor(randomFrom(seed,281+index)*keys.length);
     while(used.has(choice)||!mutationRules[keys[choice]])choice=(choice+1)%keys.length;
@@ -329,7 +367,10 @@ function crossoverGenomes(parentA,parentB,seed){
       value=child[key]===0?1+Math.floor(randomFrom(seed,310+index)*4):randomFrom(seed,320+index)<.16?0:clamp(child[key]+direction,1,4);
     }else if(key==='rootLayout'){
       value=child[key]===0?1+Math.floor(randomFrom(seed,310+index)*3):randomFrom(seed,320+index)<.16?0:clamp(child[key]+direction,1,3);
-    }else value=integer?child[key]+direction*amount:child[key]+direction*amount*(.45+randomFrom(seed,310+index)*.55);
+    }else{
+      const step=integer?Math.max(1,Math.round(amount*profile.strength)):amount*profile.strength;
+      value=integer?child[key]+direction*step:child[key]+direction*step*(.45+randomFrom(seed,310+index)*.55);
+    }
     if(integer)value=Math.round(value);
     child[key]=key==='phase'||key==='hue'?((value%max)+max)%max:clamp(value,min,max);
     if(key==='rootLayout'&&child.rootLayout>0){
@@ -338,7 +379,7 @@ function crossoverGenomes(parentA,parentB,seed){
     }
     mutations.push(key);
   }
-  if(a.figureSides===0&&b.figureSides===0&&child.figureSides===0&&randomFrom(seed,330)<.09){
+  if(a.figureSides===0&&b.figureSides===0&&child.figureSides===0&&randomFrom(seed,330)<profile.structural*1.25){
     child.figureSides=3+Math.floor(randomFrom(seed,331)*6);
     child.figureSpan=pick(seed,332,[.25,.5,.75,1]);
     child.figureScale=range(seed,333,.12,.3);
@@ -346,20 +387,20 @@ function crossoverGenomes(parentA,parentB,seed){
     child.figureSpin=range(seed,335,-.45,.45);
     mutations.push('figureSides');
   }
-  if(a.curveMode===0&&b.curveMode===0&&child.curveMode===0&&randomFrom(seed,340)<.07){
+  if(a.curveMode===0&&b.curveMode===0&&child.curveMode===0&&randomFrom(seed,340)<profile.structural){
     child.curveMode=1+Math.floor(randomFrom(seed,341)*4);
     child.curveAmplitude=range(seed,342,.06,.24);
     child.curveFrequency=range(seed,343,.6,2.2);
     mutations.push('curveMode');
   }
-  if(a.rootLayout===0&&b.rootLayout===0&&child.rootLayout===0&&randomFrom(seed,350)<.07){
+  if(a.rootLayout===0&&b.rootLayout===0&&child.rootLayout===0&&randomFrom(seed,350)<profile.structural){
     child.rootLayout=1+Math.floor(randomFrom(seed,351)*3);
     child.rootSpread=child.rootLayout===1?range(seed,352,.7,2.4):range(seed,352,0,.6);
     child.rootSpacing=range(seed,353,.06,.16);
     mutations.push('rootLayout');
   }
   child.family=classifyFamily({...child,family:null});
-  return{genome:child,inherited,mutations};
+  return{genome:child,inherited,mutations,breeding};
 }
 
 function trigonometricWave(mode,phase){
@@ -540,7 +581,8 @@ function updateView(){
   }else if(width>760){
     left=356;right=width-28;top=82;bottom=height-112;
   }else{
-    left=22;right=width-22;top=Math.max(270,ui.formula.getBoundingClientRect().bottom+14);bottom=height-112;
+    left=22;right=width-22;top=Math.max(270,ui.formula.getBoundingClientRect().bottom+14);
+    bottom=Math.min(height-112,document.querySelector('.action-bar').getBoundingClientRect().top-14);
   }
   if(right-left<160){left=22;right=width-22}
   if(bottom-top<150&&width>760){top=76;bottom=height-98}
@@ -624,11 +666,11 @@ function downloadBlob(blob,filename){
 }
 function exportFormula(){
   if(!state.current)return;
-  const{id,seed,genome,parents,inheritance,mutations}=state.current;
+  const{id,seed,genome,parents,inheritance,mutations,breeding}=state.current;
   const payload={
     format:'fractalier-formula',version:1,id:formulaId(id),seed,
     equation:'F[n+1] = union_r L_layout(r) union_i(s[n] R(i alpha[n] + n tau) K(kappa[n] + gamma T(f t + phi)) A[i](F[n])) union Cq(E[n]) union Pm^lambda(E[n])',
-    genome,parents:parents.map(formulaId),inheritance,mutations
+    genome,parents:parents.map(formulaId),inheritance,mutations,breeding
   };
   downloadBlob(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),`fractalier-${formulaId(id)}.json`);
   closeExportMenu();showToast('Formula JSON downloaded');
@@ -782,9 +824,9 @@ function animateFormula(onComplete){
   };
   animationFrame=requestAnimationFrame(frame);
 }
-function runtimeFormula({id,seed,genome,source,parents=[],inheritance=null,mutations=[]}){
+function runtimeFormula({id,seed,genome,source,parents=[],inheritance=null,mutations=[],breeding=null}){
   const normalized=normalizeGenome(genome),paths=compileGeometry(normalized);
-  return{id,seed,genome:normalized,source,parents,inheritance,mutations,paths,bounds:geometryBounds(paths)};
+  return{id,seed,genome:normalized,source,parents,inheritance,mutations,breeding,paths,bounds:geometryBounds(paths)};
 }
 function createFounderRecord(){
   const seed=randomSeed(),id=state.nextId++,genome=createGenome(seed);
@@ -796,9 +838,9 @@ function createFounderRecord(){
 function ensureInitialPopulation(){
   let initialized=false;
   if(state.current&&!state.history.some(item=>item.id===state.current.id)){
-    const{id,seed,genome,source,parents=[],inheritance=null,mutations=[]}=state.current;
+    const{id,seed,genome,source,parents=[],inheritance=null,mutations=[],breeding=null}=state.current;
     state.history.push({
-      id,seed,genome:normalizeGenome(genome),source,parents,inheritance,mutations,createdAt:Date.now(),
+      id,seed,genome:normalizeGenome(genome),source,parents,inheritance,mutations,breeding,createdAt:Date.now(),
       thumbnail:renderFormulaThumbnail(genome,seed),thumbnailVersion:4
     });
     initialized=true;
@@ -810,9 +852,9 @@ function ensureInitialPopulation(){
 }
 function addCurrentToHistory(){
   if(!state.current||state.history.some(item=>item.id===state.current.id))return;
-  const{id,seed,genome,source,parents,inheritance,mutations}=state.current;
+  const{id,seed,genome,source,parents,inheritance,mutations,breeding}=state.current;
   state.history.push({
-    id,seed,genome:{...genome},source,parents,inheritance,mutations,createdAt:Date.now(),
+    id,seed,genome:{...genome},source,parents,inheritance,mutations,breeding,createdAt:Date.now(),
     thumbnail:renderFormulaThumbnail(genome,seed),thumbnailVersion:4
   });
   saveState();renderArchive();
@@ -837,10 +879,10 @@ function selectedRecords(){return state.selectedParents.map(id=>state.history.fi
 function crossSelected(){
   const selected=selectedRecords();if(selected.length!==2||isBusy)return;
   const seed=randomSeed(),id=state.nextId++;
-  const result=crossoverGenomes(selected[0],selected[1],seed);
+  const result=crossoverGenomes(selected[0],selected[1],seed,state.breeding);
   showFormula({
     id,seed,genome:result.genome,source:'crossover',parents:[selected[0].id,selected[1].id],
-    inheritance:result.inherited,mutations:result.mutations
+    inheritance:result.inherited,mutations:result.mutations,breeding:result.breeding
   });
 }
 function toggleParent(id){
@@ -887,8 +929,11 @@ function updateFormulaUI(){
   const lineage=document.querySelector('#lineage');
   if(c?.parents?.length===2){
     const inherited=c.inheritance?`${c.inheritance.a}/${c.inheritance.b} genes`:'mixed genes';
+    const breeding=c.breeding
+      ?` · ${mixName(c.breeding.mix)} · ${MUTATION_PROFILES[c.breeding.mutationLevel].name}`
+      :'';
     const mutations=c.mutations?.length?` · mutation: ${c.mutations.map(key=>geneLabels[key]||key).join(', ')}`:' · no mutation';
-    lineage.textContent=`${formulaId(c.parents[0])} × ${formulaId(c.parents[1])} · inherited ${inherited}${mutations}`;
+    lineage.textContent=`${formulaId(c.parents[0])} × ${formulaId(c.parents[1])} · inherited ${inherited}${breeding}${mutations}`;
   }else if(c?.source==='import')lineage.textContent='imported formula · external genome';
   else lineage.textContent='founder formula · no parents';
   updateSelectionUI();
@@ -903,7 +948,7 @@ function updateSelectionUI(){
   const crossLabel=ui.cross.querySelector('span');
   if(selected.length===2){
     crossLabel.textContent=`Cross ${formulaId(selected[0].id)} × ${formulaId(selected[1].id)}`;
-    document.querySelector('#action-kicker').textContent='gene-by-gene crossover · rare mutation';
+    document.querySelector('#action-kicker').textContent=`${mixName(state.breeding.mix)} · ${MUTATION_PROFILES[state.breeding.mutationLevel].name} mutation`;
     document.querySelector('#action-title').textContent=`${familyName(selected[0].genome.family)} × ${familyName(selected[1].genome.family)}`;
   }else if(selected.length===1){
     crossLabel.textContent='Choose parent B';
@@ -914,6 +959,10 @@ function updateSelectionUI(){
     document.querySelector('#action-kicker').textContent='selective generation · choose A and B';
     document.querySelector('#action-title').textContent='Choose two parents from the Gallery';
   }
+}
+function syncBreedingUI(){
+  document.querySelector('#gene-mix').value=String(state.breeding.mix);
+  document.querySelector('#mutation-level').value=String(state.breeding.mutationLevel);
 }
 function hideArchivePreview(){
   previewToken++;cancelAnimationFrame(previewAnimationFrame);
@@ -1027,6 +1076,14 @@ document.querySelector('#formula-file').addEventListener('change',async event=>{
   catch(error){console.warn('Could not import the formula',error);showToast(error instanceof SyntaxError?'Invalid JSON file':error.message||'Formula import failed')}
   finally{input.value=''}
 });
+document.querySelector('#gene-mix').addEventListener('change',event=>{
+  state.breeding=normalizeBreeding({...state.breeding,mix:Number(event.currentTarget.value)});
+  saveState();updateSelectionUI();
+});
+document.querySelector('#mutation-level').addEventListener('change',event=>{
+  state.breeding=normalizeBreeding({...state.breeding,mutationLevel:Number(event.currentTarget.value)});
+  saveState();updateSelectionUI();
+});
 document.addEventListener('click',closeExportMenu);
 document.addEventListener('pointerdown',requestPersistentStorage,{once:true,capture:true});
 document.addEventListener('keydown',event=>{
@@ -1042,6 +1099,7 @@ addEventListener('beforeunload',saveState);
 
 async function boot(){
   await hydrateState();
+  syncBreedingUI();
   await refreshStorageStatus();
   ensureInitialPopulation();
   galleryOpen=innerWidth>=1180;
