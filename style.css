@@ -121,10 +121,14 @@ footer span:last-child{text-align:right}
 .live{display:inline-block;width:5px;height:5px;margin-right:7px;border-radius:50%;background:var(--lime);box-shadow:0 0 7px var(--lime)}
 
 @media(max-width:1179px){
-  .gallery-panel{display:none;top:76px;right:12px;bottom:105px;width:300px;box-shadow:0 20px 60px rgba(0,0,0,.55)}
+  .gallery-panel{
+    display:none;top:auto;right:12px;bottom:128px;left:12px;width:auto;height:clamp(200px,32vh,260px);
+    box-shadow:0 20px 60px rgba(0,0,0,.55)
+  }
   .gallery-panel.open{display:block}
   .gallery-head button{display:block}
   .formula-panel{top:78px;left:12px;width:320px}
+  .archive{grid-template-columns:repeat(auto-fill,minmax(112px,1fr))}
   .action-bar{width:min(620px,calc(100% - 48px));min-width:0}
 }
 
@@ -141,8 +145,12 @@ footer span:last-child{text-align:right}
   .equation{margin-top:9px;padding:8px 0;font-size:7.5px}
   .equation span{overflow:hidden;text-overflow:ellipsis}
   .traits{gap:6px 8px;margin-top:8px}
-  .gallery-panel,.gallery-panel.open{top:72px;right:10px;bottom:158px;left:10px;width:auto}
-  .archive{grid-template-columns:repeat(3,1fr)}
+  body.gallery-open .formula-panel{display:none}
+  .gallery-panel,.gallery-panel.open{
+    top:auto;right:10px;bottom:158px;left:10px;width:auto;height:clamp(190px,32vh,230px)
+  }
+  .gallery-help{display:none}
+  .archive{grid-template-columns:repeat(3,1fr);max-height:calc(100% - 75px)}
   .genome-preview{display:none!important}
   .action-bar{right:10px;bottom:40px;left:10px;width:auto;flex-direction:column;gap:7px;padding:8px;transform:none}
   .action-copy{display:none}
@@ -157,10 +165,26 @@ footer span:last-child{text-align:right}
   footer>span:nth-child(2){display:none}
 }
 
+@media(max-height:700px) and (max-width:1179px){
+  body.gallery-open .formula-panel{display:none}
+}
+
+@media(max-height:520px) and (max-width:1179px){
+  .gallery-panel,.gallery-panel.open{
+    top:72px;right:10px;bottom:158px;left:auto;width:min(280px,44vw);height:auto
+  }
+  .gallery-help{display:none}
+  .archive{grid-template-columns:repeat(2,1fr);max-height:calc(100% - 75px)}
+  .action-copy{display:none}
+}
+
 @media(max-height:620px) and (min-width:761px){
+  .action-bar{bottom:38px}
+}
+
+@media(max-height:620px) and (min-width:1180px){
   .formula-panel{top:74px}
   .gallery-panel{top:74px;bottom:94px}
-  .action-bar{bottom:38px}
 }
 
 @media(prefers-reduced-motion:reduce){

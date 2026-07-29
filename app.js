@@ -575,17 +575,24 @@ function pathProgress(path,progress){
 
 function updateView(){
   const bounds=state.current?.bounds||geometryBounds(state.current?.paths);
+  const galleryRect=galleryOpen?ui.gallery.getBoundingClientRect():null;
+  const actionTop=document.querySelector('.action-bar').getBoundingClientRect().top;
+  const formulaVisible=ui.formula.getClientRects().length>0;
+  const compactLandscape=galleryOpen&&height<520;
   let left,right,top,bottom;
   if(width>=1180){
     left=386;right=galleryOpen?width-326:width-34;top=82;bottom=height-116;
+  }else if(compactLandscape){
+    left=22;right=galleryRect.left-14;top=82;bottom=actionTop-14;
   }else if(width>760){
-    left=356;right=width-28;top=82;bottom=height-112;
+    left=formulaVisible?356:22;right=width-28;top=82;
+    bottom=galleryOpen?galleryRect.top-14:actionTop-14;
   }else{
-    left=22;right=width-22;top=Math.max(270,ui.formula.getBoundingClientRect().bottom+14);
-    bottom=Math.min(height-112,document.querySelector('.action-bar').getBoundingClientRect().top-14);
+    left=22;right=width-22;top=formulaVisible?Math.max(270,ui.formula.getBoundingClientRect().bottom+14):82;
+    bottom=galleryOpen?galleryRect.top-14:actionTop-14;
   }
   if(right-left<160){left=22;right=width-22}
-  if(bottom-top<150&&width>760){top=76;bottom=height-98}
+  if(bottom-top<90)top=Math.max(72,bottom-90);
   const worldWidth=Math.max(.08,bounds.maxX-bounds.minX),worldHeight=Math.max(.08,bounds.maxY-bounds.minY);
   const scale=Math.min((right-left)/worldWidth,(bottom-top)/worldHeight)*.88;
   view.scale=Math.min(scale,Math.min(width,height)*2.1);
@@ -1036,6 +1043,7 @@ function renderArchive(){
 function setGallery(open){
   galleryOpen=open;
   ui.gallery.classList.toggle('open',open);ui.gallery.classList.toggle('closed',!open);
+  document.body.classList.toggle('gallery-open',open);
   document.querySelector('#gallery-toggle').setAttribute('aria-expanded',String(open));
   hideArchivePreview();updateView();render(lastProgress);
 }
@@ -1092,8 +1100,7 @@ document.addEventListener('keydown',event=>{
   if(event.code==='Space'){event.preventDefault();if(!ui.cross.disabled)crossSelected()}
 });
 addEventListener('resize',()=>{
-  const wasDesktop=width>=1180;resize();
-  if(wasDesktop!==(width>=1180))setGallery(width>=1180);
+  resize();
 });
 addEventListener('beforeunload',saveState);
 
@@ -1102,8 +1109,9 @@ async function boot(){
   syncBreedingUI();
   await refreshStorageStatus();
   ensureInitialPopulation();
-  galleryOpen=innerWidth>=1180;
+  galleryOpen=true;
   ui.gallery.classList.toggle('closed',!galleryOpen);ui.gallery.classList.toggle('open',galleryOpen);
+  document.body.classList.toggle('gallery-open',galleryOpen);
   document.querySelector('#gallery-toggle').setAttribute('aria-expanded',String(galleryOpen));
   if(state.current)state.current=runtimeFormula(state.current);
   resize();renderArchive();
